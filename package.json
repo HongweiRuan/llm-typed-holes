@@ -10,7 +10,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:extension.showHoleInfo"
   ],
   "main": "./out/extension.js",
   "contributes": {

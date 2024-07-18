@@ -1,44 +1,46 @@
 import * as vscode from 'vscode';
+import { extract } from '../../context-extractor/dist/main';
 
 export function activate(context: vscode.ExtensionContext) {
 	const provider = new HoleInfoProvider();
 	vscode.window.registerTreeDataProvider('holeInfoView', provider);
 
-	const disposable = vscode.commands.registerCommand('extension.showHoleInfo', () => {
+	const disposable = vscode.commands.registerCommand('extension.showHoleInfo', async() => {
 		const editor = vscode.window.activeTextEditor;
 		if (editor) {
-			const position = editor.selection.active;
 			const document = editor.document;
-			const wordRange = document.getWordRangeAtPosition(position);
-			const word = wordRange ? document.getText(wordRange) : '';
+			const sketchPath = document.uri.fsPath;
+			// console.log(sketchPath);
+			try {
+				// call extract
+				const result = await extract(sketchPath);
 
-			// Simulate static analysis and update the provider with new data
-			// TODO: make it an async function, fetch actual data
-			const fakeData = getFakeDataBasedOnWord(word);
+				// console.log(result);
 
-			// TODO: update actual data
-			provider.updateData(fakeData);
+				const extractedData = {
+					holeType: result.hole,
+					relevantTypes: result.relevantTypes,
+					relevantHeaders: result.relevantHeaders
+				};
+
+				// update provider data
+				provider.updateData(extractedData);
+			} catch (error) {
+				if (error instanceof Error) {
+					vscode.window.showErrorMessage(`Error extracting data: ${error.message}`);
+				} else {
+					vscode.window.showErrorMessage('An unknown error occurred');
+				}
+			}
+		}
+		else {
+			vscode.window.showErrorMessage('No active editor found.');
 		}
 	});
 
 	context.subscriptions.push(disposable);
 }
 
-function getFakeDataBasedOnWord(word: string) {
-	if (word === 'example') {
-		return {
-			holeType: '',
-			relevantTypes: [],
-			relevantHeaders: []
-		};
-	} else {
-		return {
-			holeType: 'Unknown Type',
-			relevantTypes: [],
-			relevantHeaders: []
-		};
-	}
-}
 
 class HoleInfoProvider implements vscode.TreeDataProvider<HoleInfoItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<HoleInfoItem | undefined | void> = new vscode.EventEmitter<HoleInfoItem | undefined | void>();
@@ -51,6 +53,9 @@ class HoleInfoProvider implements vscode.TreeDataProvider<HoleInfoItem> {
 	};
 
 	updateData(newData: { holeType: string, relevantTypes: string[], relevantHeaders: string[] }) {
+		
+		// console.log(newData);
+
 		this.data = newData;
 		this._onDidChangeTreeData.fire();
 	}
@@ -66,6 +71,7 @@ class HoleInfoProvider implements vscode.TreeDataProvider<HoleInfoItem> {
 				new SectionItem('Relevant Types', this.data.relevantTypes.map(type => new RelevantTypeItem(type))),
 				new SectionItem('Relevant Headers', this.data.relevantHeaders.map(header => new RelevantHeaderItem(header)))
 			]);
+			
 		}
 		if (element instanceof SectionItem) {
 			return Promise.resolve(element.children);
@@ -85,21 +91,21 @@ class HoleInfoItem extends vscode.TreeItem {
 
 class HoleTypeItem extends HoleInfoItem {
 	constructor(holeType: string) {
-		super(`Hole Type: ${holeType}`)
+		super(`Hole Type: ${holeType}`);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
 	}
 }
 
 class RelevantTypeItem extends HoleInfoItem {
 	constructor(type: string) {
-		super(`Relevant Type: ${type}`)
+		super(`Relevant Type: ${type}`);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
 	}
 }
 
 class RelevantHeaderItem extends HoleInfoItem {
 	constructor(header: string) {
-		super(`Relevant Header: ${header}`)
+		super(`Relevant Header: ${header}`);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
 	}
 }
