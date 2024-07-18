@@ -2,29 +2,25 @@ import * as vscode from 'vscode';
 import { extract } from '../../context-extractor/dist/main';
 
 export function activate(context: vscode.ExtensionContext) {
-	const provider = new HoleInfoProvider();
-	vscode.window.registerTreeDataProvider('holeInfoView', provider);
+	const holeTypeProvider = new HoleTypeProvider();
+	const relevantTypesProvider = new RelevantTypesProvider();
+	const relevantHeadersProvider = new RelevantHeadersProvider();
 
-	const disposable = vscode.commands.registerCommand('extension.showHoleInfo', async() => {
+	vscode.window.registerTreeDataProvider('holeTypeView', holeTypeProvider);
+	vscode.window.registerTreeDataProvider('relevantTypesView', relevantTypesProvider);
+	vscode.window.registerTreeDataProvider('relevantHeadersView', relevantHeadersProvider);
+
+	const disposable = vscode.commands.registerCommand('extension.showHoleInfo', async () => {
 		const editor = vscode.window.activeTextEditor;
 		if (editor) {
 			const document = editor.document;
 			const sketchPath = document.uri.fsPath;
-			// console.log(sketchPath);
 			try {
-				// call extract
 				const result = await extract(sketchPath);
 
-				// console.log(result);
-
-				const extractedData = {
-					holeType: result.hole,
-					relevantTypes: result.relevantTypes,
-					relevantHeaders: result.relevantHeaders
-				};
-
-				// update provider data
-				provider.updateData(extractedData);
+				holeTypeProvider.updateData(result.hole);
+				relevantTypesProvider.updateData(result.relevantTypes);
+				relevantHeadersProvider.updateData(result.relevantHeaders);
 			} catch (error) {
 				if (error instanceof Error) {
 					vscode.window.showErrorMessage(`Error extracting data: ${error.message}`);
@@ -32,8 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
 					vscode.window.showErrorMessage('An unknown error occurred');
 				}
 			}
-		}
-		else {
+		} else {
 			vscode.window.showErrorMessage('No active editor found.');
 		}
 	});
@@ -41,21 +36,13 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(disposable);
 }
 
-
-class HoleInfoProvider implements vscode.TreeDataProvider<HoleInfoItem> {
+class HoleTypeProvider implements vscode.TreeDataProvider<HoleInfoItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<HoleInfoItem | undefined | void> = new vscode.EventEmitter<HoleInfoItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<HoleInfoItem | undefined | void> = this._onDidChangeTreeData.event;
 
-	private data: { holeType: string, relevantTypes: string[], relevantHeaders: string[] } = {
-		holeType: 'No data',
-		relevantTypes: ['No data'],
-		relevantHeaders: ['No data']
-	};
+	private data: string = 'No data';
 
-	updateData(newData: { holeType: string, relevantTypes: string[], relevantHeaders: string[] }) {
-		
-		// console.log(newData);
-
+	updateData(newData: string) {
 		this.data = newData;
 		this._onDidChangeTreeData.fire();
 	}
@@ -66,15 +53,53 @@ class HoleInfoProvider implements vscode.TreeDataProvider<HoleInfoItem> {
 
 	getChildren(element?: HoleInfoItem): Thenable<HoleInfoItem[]> {
 		if (!element) {
-			return Promise.resolve([
-				new SectionItem('Hole Type', [new HoleTypeItem(this.data.holeType)]),
-				new SectionItem('Relevant Types', this.data.relevantTypes.map(type => new RelevantTypeItem(type))),
-				new SectionItem('Relevant Headers', this.data.relevantHeaders.map(header => new RelevantHeaderItem(header)))
-			]);
-			
+			return Promise.resolve([new HoleTypeItem(this.data)]);
 		}
-		if (element instanceof SectionItem) {
-			return Promise.resolve(element.children);
+		return Promise.resolve([]);
+	}
+}
+
+class RelevantTypesProvider implements vscode.TreeDataProvider<HoleInfoItem> {
+	private _onDidChangeTreeData: vscode.EventEmitter<HoleInfoItem | undefined | void> = new vscode.EventEmitter<HoleInfoItem | undefined | void>();
+	readonly onDidChangeTreeData: vscode.Event<HoleInfoItem | undefined | void> = this._onDidChangeTreeData.event;
+
+	private data: string[] = ['No data'];
+
+	updateData(newData: string[]) {
+		this.data = newData;
+		this._onDidChangeTreeData.fire();
+	}
+
+	getTreeItem(element: HoleInfoItem): vscode.TreeItem {
+		return element;
+	}
+
+	getChildren(element?: HoleInfoItem): Thenable<HoleInfoItem[]> {
+		if (!element) {
+			return Promise.resolve(this.data.map(type => new RelevantTypeItem(type)));
+		}
+		return Promise.resolve([]);
+	}
+}
+
+class RelevantHeadersProvider implements vscode.TreeDataProvider<HoleInfoItem> {
+	private _onDidChangeTreeData: vscode.EventEmitter<HoleInfoItem | undefined | void> = new vscode.EventEmitter<HoleInfoItem | undefined | void>();
+	readonly onDidChangeTreeData: vscode.Event<HoleInfoItem | undefined | void> = this._onDidChangeTreeData.event;
+
+	private data: string[] = ['No data'];
+
+	updateData(newData: string[]) {
+		this.data = newData;
+		this._onDidChangeTreeData.fire();
+	}
+
+	getTreeItem(element: HoleInfoItem): vscode.TreeItem {
+		return element;
+	}
+
+	getChildren(element?: HoleInfoItem): Thenable<HoleInfoItem[]> {
+		if (!element) {
+			return Promise.resolve(this.data.map(header => new RelevantHeaderItem(header)));
 		}
 		return Promise.resolve([]);
 	}
@@ -88,37 +113,28 @@ class HoleInfoItem extends vscode.TreeItem {
 	}
 }
 
-
 class HoleTypeItem extends HoleInfoItem {
 	constructor(holeType: string) {
-		super(`Hole Type: ${holeType}`);
+		super(holeType);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
+		this.iconPath = new vscode.ThemeIcon('symbol-key');
 	}
 }
 
 class RelevantTypeItem extends HoleInfoItem {
 	constructor(type: string) {
-		super(`Relevant Type: ${type}`);
+		super(type);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
+		this.iconPath = new vscode.ThemeIcon('symbol-interface');
 	}
 }
 
 class RelevantHeaderItem extends HoleInfoItem {
 	constructor(header: string) {
-		super(`Relevant Header: ${header}`);
+		super(header);
 		this.collapsibleState = vscode.TreeItemCollapsibleState.None;
+		this.iconPath = new vscode.ThemeIcon('symbol-namespace');
 	}
 }
-
-class SectionItem extends HoleInfoItem {
-	children: HoleInfoItem[];
-
-	constructor(label: string, children: HoleInfoItem[]) {
-		super(label);
-		this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-		this.children = children;
-	}
-}
-
 
 export function deactivate() { }
